@@ -1,20 +1,22 @@
 import bdb
-import os
-import threading
-import jsonpickle
 import json
-from fastapi import FastAPI, HTTPException, Depends
-from pydantic import BaseModel, field_validator
+import threading
+
+import jsonpickle
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 
 app = FastAPI()
 
+
 def generate_cmd_from_import_path(import_path: str) -> str:
-    module_name, func_name = import_path.rsplit('.', 1)
+    module_name, func_name = import_path.rsplit(".", 1)
     return f"""
 import importlib
 module = importlib.import_module('{module_name}')
 getattr(module, '{func_name}')()
 """
+
 
 class DebuggerState:
     def __init__(self):
@@ -46,20 +48,17 @@ class DebuggerState:
 
 debugger_state = DebuggerState()
 
+
 class MyWebDebug(bdb.Bdb):
     def user_line(self, frame):
         debugger_state.current_frame = frame
         debugger_state.event.clear()  # Pause execution until an action is given via the API
         debugger_state.event.wait()
 
+
 class InitRequest(BaseModel):
     classpath: str
 
-    @field_validator('filepath')
-    def file_exists(cls, v):
-        if not os.path.isfile(v):
-            raise ValueError('File does not exist')
-        return v.strip()
 
 @app.post("/debug/init")
 def init_debugger(request: InitRequest):
@@ -68,14 +67,17 @@ def init_debugger(request: InitRequest):
     debugger_state.debugger = MyWebDebug()
     print("Debugger initialized")
 
+
 @app.get("/debug/stop")
 def stop_debugging():
     debugger_state.stop_debugging()
     return
 
+
 class BreakpointRequest(BaseModel):
     filepath: str
     line: int
+
 
 @app.post("/debug/set_breakpoint")
 def set_breakpoint(request: BreakpointRequest):
@@ -83,7 +85,12 @@ def set_breakpoint(request: BreakpointRequest):
         raise HTTPException(status_code=400, detail="Debugger is not initialized")
 
     debugger_state.debugger.set_break(request.filepath, request.line)
-    return {"status": "Breakpoint set", "filepath": request.filepath, "line": request.line}
+    return {
+        "status": "Breakpoint set",
+        "filepath": request.filepath,
+        "line": request.line,
+    }
+
 
 @app.get("/debug/start")
 def start_debugging():
@@ -93,6 +100,7 @@ def start_debugging():
     debugger_state.start()
     return {"status": "Debugging started"}
 
+
 @app.get("/debug/step")
 def step():
     if debugger_state.current_frame:
@@ -100,6 +108,7 @@ def step():
         return {"status": "Stepped to next line"}
     else:
         raise HTTPException(status_code=400, detail="Debugger is not paused")
+
 
 @app.get("/debug/vars")
 def get_vars():
@@ -116,7 +125,9 @@ def get_vars():
 
 def run():
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8002)
+
 
 if __name__ == "__main__":
     run()
